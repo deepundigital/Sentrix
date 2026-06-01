@@ -1,52 +1,70 @@
 const reconScan = require("./recon.service");
 const xssScan = require("./xss.service");
 const sqliScan = require("./sqli.service");
-// const csrfScan = require("./csrf.service");
+const crawl = require("./crawler.service");
 
 const runScanner = async (url) => {
-  const results = {
-    recon: [],
-    xss: [],
-    sqli: [],
-    csrf:[],
-  };
+  const allFindings = [];
+  const scannedUrls = new Set();
 
+  // 🔹 1. Recon on base URL
   try {
     const recon = await reconScan(url);
-    if (Array.isArray(recon)) results.recon = recon;
+    if (Array.isArray(recon)) {
+      allFindings.push(...recon);
+    }
   } catch (e) {
     console.error("[Recon Error]", e.message);
   }
 
+  // 🔹 2. Crawl surfaces (Depth = 1)
+  let surfaces = [];
   try {
-    const xss = await xssScan(url);
-    if (Array.isArray(xss)) results.xss = xss;
+    surfaces = await crawl(url);
   } catch (e) {
-    console.error("[XSS Error]", e.message);
+    console.error("[Crawler Error]", e.message);
   }
 
-  try {
-    const sqli = await sqliScan(url);
-    if (Array.isArray(sqli)) results.sqli = sqli;
-  } catch (e) {
-    console.error("[SQLi Error]", e.message);
+  // Always include base URL
+  surfaces.push({
+    url,
+    method: "GET",
+    params: []
+  });
+
+  // 🔹 3. Scan each surface
+  for (const surface of surfaces) {
+
+    const uniqueKey = `${surface.method}:${surface.url}`;
+    if (scannedUrls.has(uniqueKey)) continue;
+    scannedUrls.add(uniqueKey);
+
+    // 🔹 XSS & SQLi only for GET surfaces
+    if (surface.method === "GET") {
+      try {
+        const xss = await xssScan(surface.url, surface.params);
+        if (Array.isArray(xss)) {
+          allFindings.push(...xss);
+        }
+      } catch (e) {
+        console.error("[XSS Error]", e.message);
+      }
+
+      try {
+        const sqli = await sqliScan(surface.url, surface.params);
+        if (Array.isArray(sqli)) {
+          allFindings.push(...sqli);
+        }
+      } catch (e) {
+        console.error("[SQLi Error]", e.message);
+      }
+    }
   }
-  //  try {
-  //   const csrf = await csrfScan(url);
-  //   if (Array.isArray(csrf)) results.csrf = csrf;
-  // } catch (e) {
-  //   console.error("[CSRF Error]", e.message);
-  // }
 
   return {
     target: url,
     time: new Date().toISOString(),
-    findings: [
-      ...results.recon,
-      ...results.xss,
-      ...results.sqli,
-      // ...results.csrf,
-    ],
+    findings: allFindings
   };
 };
 
