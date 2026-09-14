@@ -71,5 +71,5 @@ It focuses on OWASP Top 10 vulnerabilities and provides structured, easy-to-unde
 ### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/Indransh-pratap/Sentrix.git
+git clone https://github.com/deepundigital/Sentrix.git
 cd Sentrix
